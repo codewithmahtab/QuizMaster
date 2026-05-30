@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useUser } from "@clerk/nextjs";
 import { motion } from "framer-motion";
 import {
   Coins,
@@ -68,6 +69,7 @@ const fadeUp = {
 export default function HomeClient({ user, dailyCompleted, dailyScore }: HomeClientProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { isLoaded, isSignedIn } = useUser();
   const [localCoins, setLocalCoins] = useState(user?.coins ?? 0);
   const [rewardsOpen, setRewardsOpen] = useState(false);
   const [claimedToday, setClaimedToday] = useState(true);
@@ -75,16 +77,17 @@ export default function HomeClient({ user, dailyCompleted, dailyScore }: HomeCli
 
   const avatar = user ? (user.avatarUrl || getAvatarUrl(user.username)) : null;
 
-  // If we arrive mid-handshake (Clerk OAuth redirect), user will be null
-  // briefly. Auto-refresh once after 1.2s to pick up the newly created session.
+  // If Clerk says we're signed in but the server rendered us as a guest,
+  // it means the SSR happened during the OAuth handshake before the cookie was set.
+  // Wait 800ms (for Clerk to settle) then do a server refresh to pick up the session.
   useEffect(() => {
-    if (!user && (searchParams.get("__clerk_handshake") || searchParams.get("__clerk_status"))) {
+    if (isLoaded && isSignedIn && !user) {
       const timer = setTimeout(() => {
         router.refresh();
-      }, 1200);
+      }, 800);
       return () => clearTimeout(timer);
     }
-  }, [user, searchParams, router]);
+  }, [isLoaded, isSignedIn, user, router]);
 
   // Auto check daily rewards claim status on mount
   useEffect(() => {

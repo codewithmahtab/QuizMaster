@@ -14,7 +14,6 @@ const isProtectedRoute = createRouteMatcher([
 export default clerkMiddleware(async (auth, req) => {
   const { userId } = await auth();
   if (isProtectedRoute(req) && !userId) {
-    // Redirect to home with a query parameter to open the sign-in modal
     const url = new URL("/home", req.url);
     url.searchParams.set("auth", "sign-in");
     return NextResponse.redirect(url);
@@ -29,3 +28,4 @@ export const config = {
     '/(api|trpc)(.*)',
   ],
 };
+
