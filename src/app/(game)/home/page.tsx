@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getRankFromPoints } from "@/lib/rankSystem";
@@ -10,13 +11,10 @@ export default async function HomePage() {
 
   // Guest support — load user data only if logged in
   if (!session?.user?.id) {
-    // Render a guest-friendly homepage with no user data
     return (
-      <HomeClient
-        user={null}
-        dailyCompleted={false}
-        dailyScore={null}
-      />
+      <Suspense fallback={null}>
+        <HomeClient user={null} dailyCompleted={false} dailyScore={null} />
+      </Suspense>
     );
   }
 
@@ -38,11 +36,9 @@ export default async function HomePage() {
 
   if (!user) {
     return (
-      <HomeClient
-        user={null}
-        dailyCompleted={false}
-        dailyScore={null}
-      />
+      <Suspense fallback={null}>
+        <HomeClient user={null} dailyCompleted={false} dailyScore={null} />
+      </Suspense>
     );
   }
 
@@ -57,15 +53,17 @@ export default async function HomePage() {
   const xpProgress = xpProgressInLevel(user.xp);
 
   return (
-    <HomeClient
-      user={{
-        ...user,
-        winRate: winRate(user.totalWins, user.totalMatches),
-        rank,
-        xpProgress,
-      }}
-      dailyCompleted={!!dailyCompletion}
-      dailyScore={dailyCompletion?.score ?? null}
-    />
+    <Suspense fallback={null}>
+      <HomeClient
+        user={{
+          ...user,
+          winRate: winRate(user.totalWins, user.totalMatches),
+          rank,
+          xpProgress,
+        }}
+        dailyCompleted={!!dailyCompletion}
+        dailyScore={dailyCompletion?.score ?? null}
+      />
+    </Suspense>
   );
 }
