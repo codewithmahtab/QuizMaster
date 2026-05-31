@@ -33,23 +33,25 @@ export async function auth() {
     }
 
     // 2. Slow Path: User is logging in for the first time, or account mapping does not exist yet
-    // Fetch user details from Clerk to synchronize profile and create a local record
-    // Retry up to 3 times to handle the Clerk OAuth handshake timing window
+    // Use a 3s timeout — if Clerk API is slow, return null and let the client refresh.
     let clerkUser = null;
-    for (let attempt = 0; attempt < 3; attempt++) {
-      try {
-        clerkUser = await currentUser();
-        if (clerkUser) break;
-      } catch (fetchError) {
-        console.error(`Clerk currentUser fetch attempt ${attempt + 1} failed:`, fetchError);
+    try {
+      clerkUser = await Promise.race([
+        currentUser(),
+        new Promise<null>((_, reject) =>
+          setTimeout(() => reject(new Error("currentUser timeout")), 3000)
+        ),
+      ]);
+    } catch (fetchError: any) {
+      if (fetchError?.message === "currentUser timeout") {
+        console.warn("Clerk currentUser() timed out — returning null for this SSR render");
+      } else {
+        console.error("Clerk currentUser fetch failed:", fetchError);
       }
-      if (attempt < 2) {
-        await new Promise((resolve) => setTimeout(resolve, 250));
-      }
+      return null;
     }
 
     if (!clerkUser) {
-      // All retries failed — return null and let the client side handle it
       return null;
     }
 
