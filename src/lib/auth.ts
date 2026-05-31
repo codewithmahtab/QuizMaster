@@ -48,18 +48,18 @@ export async function auth() {
     }
 
     // 2. Slow Path: User is logging in for the first time, or account mapping does not exist yet
-    // Use a 3s timeout — if Clerk API is slow, return null and let the client refresh.
+    // Use a robust 15s timeout — ensures Clerk has time to process the OAuth handshake on production cold starts
     let clerkUser = null;
     try {
       clerkUser = await Promise.race([
         currentUser(),
         new Promise<null>((_, reject) =>
-          setTimeout(() => reject(new Error("currentUser timeout")), 3000)
+          setTimeout(() => reject(new Error("currentUser timeout")), 15000)
         ),
       ]);
     } catch (fetchError: any) {
       if (fetchError?.message === "currentUser timeout") {
-        console.warn("Clerk currentUser() timed out — returning null for this SSR render");
+        console.warn("Clerk currentUser() timed out (15s limit) — returning null for this SSR render");
       } else {
         console.error("Clerk currentUser fetch failed:", fetchError);
       }
