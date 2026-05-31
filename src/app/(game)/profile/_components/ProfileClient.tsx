@@ -62,14 +62,14 @@ export default function ProfileClient({
   const { signOut } = useClerk();
 
   return (
-    <div className="flex flex-col min-h-[calc(100vh-12rem)] md:min-h-[calc(100vh-8rem)] w-full max-w-6xl mx-auto gap-8 sm:gap-10 px-4">
+    <div className="flex flex-col min-h-[calc(100vh-12rem)] md:min-h-[calc(100vh-8rem)] w-full max-w-6xl mx-auto gap-8 sm:gap-10">
 
       {/* ── PROFILE HEADER ── */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4 }}
-        className="relative overflow-hidden rounded-3xl p-6 sm:p-10 shadow-2xl"
+        className="relative overflow-hidden rounded-md sm:rounded-3xl p-6 sm:p-10 shadow-2xl"
         style={{
           background: "linear-gradient(135deg, rgba(124, 58, 237, 0.15) 0%, rgba(6, 182, 212, 0.05) 100%)",
           border: "1px solid rgba(255, 255, 255, 0.1)",
