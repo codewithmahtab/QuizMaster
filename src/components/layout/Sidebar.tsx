@@ -17,6 +17,7 @@ import {
   UserPlus,
 } from "lucide-react";
 import { cn, formatCoins } from "@/lib/utils";
+import { useUserStats } from "@/context/UserStatsContext";
 
 interface UserData {
   username: string;
@@ -48,9 +49,11 @@ export function Sidebar({ user, frameId, frameUrl, frameName }: SidebarProps) {
   const pathname = usePathname();
   const { signOut } = useClerk();
   const { user: clerkUser, isLoaded } = useUser();
+  let statsCtx: ReturnType<typeof useUserStats> | null = null;
+  try { statsCtx = useUserStats(); } catch {}
 
   const isAuthenticated = !!user || (isLoaded && !!clerkUser);
-  const displayCoins = user ? user.coins : 100; // default 100 welcome bonus if DB is syncing
+  const displayCoins = statsCtx ? statsCtx.coins : (user ? user.coins : 100); // default 100 welcome bonus if DB is syncing
 
   return (
     <aside className="hidden md:flex flex-col w-56 h-screen sticky top-0 glass-sidebar py-6 px-4 shrink-0 overflow-y-auto">

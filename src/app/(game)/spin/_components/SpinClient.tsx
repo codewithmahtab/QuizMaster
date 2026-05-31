@@ -471,7 +471,7 @@ export default function SpinClient({
         <div className="flex flex-col gap-6 w-full max-w-md mx-auto lg:mx-0">
           <div className="rounded-2xl sm:rounded-3xl border border-white/10 bg-slate-900/60 p-5 sm:p-6 shadow-xl relative overflow-hidden">
             <h2 className="text-lg sm:text-xl font-bold mb-4 flex items-center gap-2">
-              <span>🎁</span> Available Spin
+              Available Spin
             </h2>
 
             {/* Spin options action column */}
@@ -493,7 +493,6 @@ export default function SpinClient({
                     {isFreeAvailable ? "Claim your free daily prize!" : "Available once every 24 hours"}
                   </div>
                 </div>
-                <span className="text-xl sm:text-2xl">🎉</span>
               </button>
 
               {/* Option 2: Pay 50 Coins */}

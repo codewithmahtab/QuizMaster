@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, useCallback, ReactNode } from "react";
+import { createContext, useContext, useState, useCallback, ReactNode, useEffect } from "react";
 
 interface UserStats {
   coins: number;
@@ -33,6 +33,12 @@ export function UserStatsProvider({
   const [coins, setCoinsState] = useState(initialCoins);
   const [xp, setXpState] = useState(initialXp);
   const [level, setLevelState] = useState(initialLevel);
+
+  useEffect(() => {
+    setCoinsState(initialCoins);
+    setXpState(initialXp);
+    setLevelState(initialLevel);
+  }, [initialCoins, initialXp, initialLevel]);
 
   const setCoins = useCallback((value: number) => {
     setCoinsState(value);

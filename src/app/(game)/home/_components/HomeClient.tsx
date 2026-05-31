@@ -25,6 +25,8 @@ import {
 import { cn, formatCoins, getAvatarUrl } from "@/lib/utils";
 import type { RankInfo } from "@/types/user";
 import { DailyRewardsModal } from "@/components/game/DailyRewardsModal";
+import { useUserStats } from "@/context/UserStatsContext";
+import { xpProgressInLevel } from "@/lib/levelSystem";
 import oneVsOneIcon from "@/assets/vs.png";
 import rankIcon from "@/assets/rank1.png";
 import generalIcon from "@/assets/general.png";
@@ -70,12 +72,19 @@ export default function HomeClient({ user, dailyCompleted, dailyScore }: HomeCli
   const router = useRouter();
   const searchParams = useSearchParams();
   const { isLoaded, isSignedIn } = useUser();
+  let statsCtx: ReturnType<typeof useUserStats> | null = null;
+  try { statsCtx = useUserStats(); } catch {}
+
   const [localCoins, setLocalCoins] = useState(user?.coins ?? 0);
   const [rewardsOpen, setRewardsOpen] = useState(false);
   const [claimedToday, setClaimedToday] = useState(true);
   const [streak, setStreak] = useState(user?.loginStreak ?? 0);
 
   const avatar = user ? (user.avatarUrl || getAvatarUrl(user.username)) : null;
+  
+  // Use live global stats if available
+  const liveXp = statsCtx ? statsCtx.xp : (user?.xp ?? 0);
+  const liveXpProgress = user ? xpProgressInLevel(liveXp) : null;
 
   // If Clerk says we're signed in but the server rendered us as a guest,
   // it means the SSR happened during the OAuth handshake before the cookie was set.
@@ -113,6 +122,7 @@ export default function HomeClient({ user, dailyCompleted, dailyScore }: HomeCli
 
   function handleClaimSuccess(coinsAwarded: number, newCoinsTotal: number) {
     setLocalCoins(newCoinsTotal);
+    if (statsCtx) statsCtx.setCoins(newCoinsTotal);
     setClaimedToday(true);
     setStreak((s) => s + 1);
   }
@@ -179,13 +189,13 @@ export default function HomeClient({ user, dailyCompleted, dailyScore }: HomeCli
                     </p>
                     <div className="pt-2 w-full max-w-[240px] sm:max-w-sm mx-auto sm:mx-0">
                       <div className="flex justify-between items-center text-[9px] sm:text-[10px] text-muted-foreground mb-1">
-                        <span className="font-bold text-[var(--brand-gold)]">LEVEL {user.xpProgress.level}</span>
-                        <span className="font-mono font-semibold">{user.xpProgress.current} / {user.xpProgress.needed} XP</span>
+                        <span className="font-bold text-[var(--brand-gold)]">LEVEL {liveXpProgress?.level}</span>
+                        <span className="font-mono font-semibold">{liveXpProgress?.current} / {liveXpProgress?.needed} XP</span>
                       </div>
                       <div className="h-2 rounded-full bg-white/5 overflow-hidden border border-white/5 shadow-inner">
                         <motion.div
                           initial={{ width: 0 }}
-                          animate={{ width: `${user.xpProgress.percentage}%` }}
+                          animate={{ width: `${liveXpProgress?.percentage}%` }}
                           transition={{ duration: 0.8, ease: "easeOut", delay: 0.2 }}
                           className="h-full rounded-full bg-[var(--brand-gold)]"
                         />
