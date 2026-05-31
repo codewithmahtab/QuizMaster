@@ -7,6 +7,7 @@ import { useUser } from "@clerk/nextjs";
 import { Coins, Zap, Bell, LogIn, UserPlus } from "lucide-react";
 import { cn, formatCoins, getAvatarUrl } from "@/lib/utils";
 import { NotificationCenter } from "@/components/game/NotificationCenter";
+import { useUserStats } from "@/context/UserStatsContext";
 
 interface UserData {
   username: string;
@@ -26,14 +27,18 @@ interface TopBarProps {
 export function TopBar({ user, frameId, frameUrl, frameName }: TopBarProps) {
   const pathname = usePathname();
   const { user: clerkUser, isLoaded } = useUser();
+  // Read coins/level from global context (stays in sync across all components)
+  let statsCtx: ReturnType<typeof useUserStats> | null = null;
+  try { statsCtx = useUserStats(); } catch {}
 
   const isAuthenticated = !!user || (isLoaded && !!clerkUser);
   const displayUsername = user ? user.username : (clerkUser?.username || clerkUser?.firstName || "Player");
   const displayAvatar = user 
     ? (user.avatarUrl || getAvatarUrl(user.username)) 
     : (clerkUser?.imageUrl || getAvatarUrl(displayUsername));
-  const displayCoins = user ? user.coins : 100;
-  const displayLevel = user ? user.level : 1;
+  // Prefer live context value (updated on purchase/reward) over stale server prop
+  const displayCoins = statsCtx ? statsCtx.coins : (user ? user.coins : 100);
+  const displayLevel = statsCtx ? statsCtx.level : (user ? user.level : 1);
 
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);

@@ -4,6 +4,7 @@ import { TopBar } from "@/components/layout/TopBar";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { ClerkAuthModal } from "@/components/game/ClerkAuthModal";
+import { UserStatsProvider } from "@/context/UserStatsContext";
 
 export const dynamic = "force-dynamic";
 
@@ -56,27 +57,33 @@ export default async function GameLayout({
   }
 
   return (
-    <div className="min-h-screen bg-background flex md:flex-row flex-col mesh-bg">
-      <Sidebar
-        user={user}
-        frameId={equippedFrame?.id}
-        frameUrl={equippedFrame?.imageUrl}
-        frameName={equippedFrame?.name}
-      />
-      <div className="flex-1 flex flex-col min-w-0">
-        <TopBar
+    <UserStatsProvider
+      initialCoins={user?.coins ?? 0}
+      initialXp={user?.xp ?? 0}
+      initialLevel={user?.level ?? 1}
+    >
+      <div className="min-h-screen bg-background flex md:flex-row flex-col mesh-bg">
+        <Sidebar
           user={user}
           frameId={equippedFrame?.id}
           frameUrl={equippedFrame?.imageUrl}
           frameName={equippedFrame?.name}
         />
-        <main className="flex-1 pb-safe md:pb-8 max-w-[1600px] w-full px-4 sm:px-8 py-6 mx-auto">
-          {children}
-        </main>
+        <div className="flex-1 flex flex-col min-w-0">
+          <TopBar
+            user={user}
+            frameId={equippedFrame?.id}
+            frameUrl={equippedFrame?.imageUrl}
+            frameName={equippedFrame?.name}
+          />
+          <main className="flex-1 pb-safe md:pb-8 max-w-[1600px] w-full px-4 sm:px-8 py-6 mx-auto">
+            {children}
+          </main>
+        </div>
+        <BottomNav />
+        <ClerkAuthModal />
       </div>
-      <BottomNav />
-      <ClerkAuthModal />
-    </div>
+    </UserStatsProvider>
   );
 }
 

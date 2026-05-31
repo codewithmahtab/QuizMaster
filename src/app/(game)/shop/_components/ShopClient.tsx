@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Coins, Check, ShoppingBag, ShieldCheck, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn, formatCoins, getAvatarUrl } from "@/lib/utils";
+import { useUserStats } from "@/context/UserStatsContext";
 
 interface ShopItem {
   id: string;
@@ -27,10 +28,22 @@ interface ShopClientProps {
 
 export default function ShopClient({ initialItems, initialCoins, username }: ShopClientProps) {
   const [items, setItems] = useState<ShopItem[]>(initialItems);
-  const [coins, setCoins] = useState(initialCoins);
+  const [coins, setCoinsLocal] = useState(initialCoins);
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<"shop" | "inventory">("shop");
-  
+  const { setCoins: setGlobalCoins } = useUserStats();
+
+  // Keep global context in sync whenever local coins change
+  useEffect(() => {
+    setGlobalCoins(coins);
+  }, [coins, setGlobalCoins]);
+
+  // Wrapper so we always update both local + global
+  function setCoins(value: number) {
+    setCoinsLocal(value);
+    setGlobalCoins(value);
+  }
+
   // Modals
   const [purchasingItem, setPurchasingItem] = useState<ShopItem | null>(null);
   const [purchaseSuccess, setPurchaseSuccess] = useState<ShopItem | null>(null);
