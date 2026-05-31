@@ -16,20 +16,35 @@ export async function auth() {
           providerAccountId: userId,
         },
       },
-      include: {
-        user: true,
-      },
+      select: { userId: true },
     });
 
-    if (existingAccount?.user) {
-      return {
-        user: {
-          id: existingAccount.user.id,
-          email: existingAccount.user.email,
-          name: existingAccount.user.username,
-          image: existingAccount.user.avatarUrl,
+    if (existingAccount?.userId) {
+      // Look up the user separately to handle orphaned accounts gracefully
+      const dbUser = await prisma.user.findUnique({
+        where: { id: existingAccount.userId },
+      });
+
+      if (dbUser) {
+        return {
+          user: {
+            id: dbUser.id,
+            email: dbUser.email,
+            name: dbUser.username,
+            image: dbUser.avatarUrl,
+          },
+        };
+      }
+
+      // Orphaned account (user was deleted) — clean it up and fall through to recreate
+      await prisma.account.delete({
+        where: {
+          provider_providerAccountId: {
+            provider: "clerk",
+            providerAccountId: userId,
+          },
         },
-      };
+      }).catch(() => {}); // Ignore if already gone
     }
 
     // 2. Slow Path: User is logging in for the first time, or account mapping does not exist yet
@@ -137,9 +152,3 @@ export async function auth() {
   }
 }
 
-export const signIn = async () => {};
-export const signOut = async () => {};
-export const handlers = {
-  GET: () => new Response("Not found", { status: 404 }),
-  POST: () => new Response("Not found", { status: 404 }),
-};
