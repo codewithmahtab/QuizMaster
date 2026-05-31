@@ -58,7 +58,14 @@ export default function BattleHome() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ type: selectedMode.key, coinStake: selectedMode.coinStake }),
       });
-      const data = await res.json();
+      
+      let data;
+      try {
+        data = await res.json();
+      } catch {
+        throw new Error(`Server encountered a transient issue (Code ${res.status}). Please try again!`);
+      }
+
       if (!res.ok) throw new Error(data.error || "Failed to find match");
 
       // Go to matchmaking screen with matchId
