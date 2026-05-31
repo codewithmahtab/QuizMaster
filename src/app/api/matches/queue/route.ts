@@ -2,9 +2,35 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { shuffle } from "@/lib/utils";
+import { GENERAL_QUESTIONS } from "@/lib/generalQuestions";
 
 // ── Pick 10 random questions for a match ─────────────────────────
 async function pickQuestions(): Promise<string[]> {
+  // Ensure the Question collection is seeded with GENERAL_QUESTIONS
+  const count = await prisma.question.count();
+  if (count < 100) {
+    // Purge any low-quality placeholder/mock questions
+    await prisma.question.deleteMany({}).catch((err) => console.error("Purging old questions failed:", err));
+
+    const questionsToSeed = [];
+    for (const [category, qs] of Object.entries(GENERAL_QUESTIONS)) {
+      for (const q of qs) {
+        questionsToSeed.push({
+          text: q.q,
+          options: q.o,
+          answerIndex: q.a,
+          category: category,
+          difficulty: "medium",
+          explanation: "Classic level question!",
+          isActive: true,
+        });
+      }
+    }
+    if (questionsToSeed.length > 0) {
+      await prisma.question.createMany({ data: questionsToSeed }).catch((err) => console.error("Seeding questions failed:", err));
+    }
+  }
+
   const all = await prisma.question.findMany({
     where: { isActive: true },
     select: { id: true },
