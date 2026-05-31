@@ -83,6 +83,8 @@ export async function GET(
       player2: match.player2,
       player1Score: match.player1Score,
       player2Score: match.player2Score,
+      player1Finished: match.player1Finished,
+      player2Finished: match.player2Finished,
       winnerId: match.winnerId,
       coinStake: match.coinStake,
       completedAt: match.completedAt,

@@ -94,7 +94,7 @@ function MatchmakingInner() {
     }
   }, [alreadyJoined, matchId, router]);
 
-  // Poll for match status every 2s
+  // Poll for match status every 500ms (ultra-fast matchmaking updates!)
   useEffect(() => {
     if (!matchId || alreadyJoined) return;
 
@@ -114,7 +114,7 @@ function MatchmakingInner() {
       } catch {
         // ignore transient network errors
       }
-    }, 2000);
+    }, 500);
 
     return () => clearInterval(poll);
   }, [matchId, alreadyJoined, router]);

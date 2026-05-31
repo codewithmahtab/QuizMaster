@@ -5,6 +5,7 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { ClerkAuthModal } from "@/components/game/ClerkAuthModal";
 import { UserStatsProvider } from "@/context/UserStatsContext";
+import { levelFromXP } from "@/lib/levelSystem";
 
 export const dynamic = "force-dynamic";
 
@@ -43,6 +44,17 @@ export default async function GameLayout({
     });
 
     if (dbUser) {
+      // Recalculate and correct level desyncs dynamically
+      const correctLevel = levelFromXP(dbUser.xp);
+      if (dbUser.level !== correctLevel) {
+        dbUser.level = correctLevel;
+        // Asynchronously correct desync in DB
+        prisma.user.update({
+          where: { id: session.user.id },
+          data: { level: correctLevel },
+        }).catch(err => console.error("Failed to sync level in layout:", err));
+      }
+
       // Strip avatarFrameId before passing to nav components
       const { avatarFrameId, ...rest } = dbUser;
       user = rest;

@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { cn, getAvatarUrl } from "@/lib/utils";
 import { getRankFromPoints } from "@/lib/rankSystem";
+import { useUserStats } from "@/context/UserStatsContext";
 import BattleResult from "./BattleResult";
 
 interface Player {
@@ -37,6 +38,7 @@ interface MatchData {
 }
 
 interface ResultData {
+  isWaitingForOpponent?: boolean;
   isWin: boolean;
   isDraw: boolean;
   winnerId: string | null;
@@ -46,7 +48,6 @@ interface ResultData {
   finalScore: { player1: number; player2: number };
 }
 
-const QUESTION_TIME = 15;
 const OPTION_LABELS = ["A", "B", "C", "D"];
 
 interface BattleArenaProps {
@@ -62,14 +63,39 @@ export default function BattleArena({ matchId, currentUserId }: BattleArenaProps
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
   const [correctIndex, setCorrectIndex] = useState<number | null>(null);
-  const [timeLeft, setTimeLeft] = useState(QUESTION_TIME);
   const [showFeedback, setShowFeedback] = useState(false);
   const [myScore, setMyScore] = useState(0);
   const [opponentScore, setOpponentScore] = useState(0);
   const [result, setResult] = useState<ResultData | null>(null);
+  const [totalTimeLeft, setTotalTimeLeft] = useState(90); // 90 seconds overall
+  const [modal, setModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    type: "confirm" | "alert";
+    onConfirm: () => void;
+    onCancel?: () => void;
+  }>({
+    isOpen: false,
+    title: "",
+    message: "",
+    type: "alert",
+    onConfirm: () => {},
+  });
   const [loading, setLoading] = useState(true);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const completePollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Synchronize global UserStats level & coins on battle finalization
+  let statsCtx: any = null;
+  try { statsCtx = useUserStats(); } catch {}
+
+  useEffect(() => {
+    // If result has finalized (completed results fully computed)
+    if (result && !result.isWaitingForOpponent && statsCtx?.refreshFromServer) {
+      statsCtx.refreshFromServer();
+    }
+  }, [result, statsCtx]);
   const answeredCount = useRef(0);
 
   // Load match data once
@@ -83,63 +109,166 @@ export default function BattleArena({ matchId, currentUserId }: BattleArenaProps
         setMyScore(data.myRole === "player1" ? data.match.player1Score : data.match.player2Score);
         setOpponentScore(data.myRole === "player1" ? data.match.player2Score : data.match.player1Score);
         
-        // If match is already completed, load results immediately
-        if (data.match.status === "completed") {
+        const alreadyFinished = data.myRole === "player1" ? data.match.player1Finished : data.match.player2Finished;
+
+        // If match is already completed or I have finished, load results immediately
+        if (data.match.status === "completed" || alreadyFinished) {
           try {
             const res = await fetch(`/api/matches/${matchId}/complete`, { method: "POST" });
             const resData = await res.json();
             setResult(resData);
+
+            if (resData.isWaitingForOpponent) {
+              completePollRef.current = setInterval(async () => {
+                try {
+                  const resPoll = await fetch(`/api/matches/${matchId}/complete`, { method: "POST" });
+                  const dataPoll = await resPoll.json();
+                  if (!dataPoll.isWaitingForOpponent) {
+                    clearInterval(completePollRef.current!);
+                    setResult(dataPoll);
+                  } else {
+                    const resMatch = await fetch(`/api/matches/${matchId}`);
+                    const dataMatch = await resMatch.json();
+                    if (dataMatch.match) {
+                      setResult({
+                        ...dataPoll,
+                        finalScore: {
+                          player1: dataMatch.match.player1Score,
+                          player2: dataMatch.match.player2Score,
+                        }
+                      });
+                    }
+                  }
+                } catch (err) {
+                  console.error("Failed to poll final completion status:", err);
+                }
+              }, 2000);
+            }
           } catch (err) {
             console.error("Error loading completed match:", err);
           }
         }
         setLoading(false);
       });
+
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+      if (completePollRef.current) clearInterval(completePollRef.current);
+    };
   }, [matchId]);
 
-  // Poll opponent score every 2s
+  // Poll opponent score every 700ms (ultra-responsive live update!)
   useEffect(() => {
-    if (!match) return;
+    if (!match || result) return;
     pollRef.current = setInterval(async () => {
       const res = await fetch(`/api/matches/${matchId}`);
       const data = await res.json();
       if (data.match) {
+        // If match was completed (e.g. opponent surrendered or disconnected)
+        if (data.match.status === "completed" || data.match.status === "abandoned") {
+          if (pollRef.current) clearInterval(pollRef.current);
+          const resComp = await fetch(`/api/matches/${matchId}/complete`, { method: "POST" });
+          const dataComp = await resComp.json();
+          setResult(dataComp);
+          return;
+        }
+
         const oppScore = myRole === "player1" ? data.match.player2Score : data.match.player1Score;
         setOpponentScore(oppScore);
       }
-    }, 2000);
+    }, 700);
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  }, [match, matchId, myRole]);
+  }, [match, matchId, myRole, result]);
 
-  const handleTimeUp = useCallback(() => {
-    if (showFeedback) return;
-    setSelectedAnswer(-1);
-    setCorrectIndex(null);
-    setShowFeedback(true);
-  }, [showFeedback]);
-
-  // Timer per question
+  // Overall match countdown timer (90s limit)
   useEffect(() => {
-    if (loading || showFeedback || result) return;
-    setTimeLeft(QUESTION_TIME);
-
-    timerRef.current = setInterval(() => {
-      setTimeLeft((t) => {
+    if (loading || result) return;
+    const interval = setInterval(() => {
+      setTotalTimeLeft((t) => {
         if (t <= 1) {
-          clearInterval(timerRef.current!);
-          handleTimeUp();
+          clearInterval(interval);
+          handleAutoForfeit();
           return 0;
         }
         return t - 1;
       });
     }, 1000);
+    return () => clearInterval(interval);
+  }, [loading, result]);
 
-    return () => { if (timerRef.current) clearInterval(timerRef.current); };
-  }, [loading, currentIndex, showFeedback, result, handleTimeUp]);
+  // Prevent navigating away from active battle (Link clicks & Tab Close)
+  useEffect(() => {
+    if (loading || result) return;
+
+    // 1. Intercept Browser Back/Close/Refresh
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "Leaving this page will forfeit the match! Are you sure you want to surrender?";
+      return e.returnValue;
+    };
+
+    // 2. Intercept Sidebar/Topbar Navigation Links
+    const handleLinkClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      const anchor = target.closest("a");
+      
+      if (anchor) {
+        const href = anchor.getAttribute("href");
+        // Intercept local links going away from this active match
+        if (href && !href.startsWith("#") && !href.startsWith("javascript:") && !href.includes(`/battle/${matchId}`)) {
+          e.preventDefault();
+          e.stopPropagation();
+          
+          setModal({
+            isOpen: true,
+            title: "⚠️ Warning: Leaving Battle",
+            message: "Are you sure you want to navigate away? Leaving the screen will forfeit this battle and declare your opponent the winner!",
+            type: "confirm",
+            onConfirm: async () => {
+              try {
+                await performSurrender(true);
+                router.push(href);
+              } catch (err) {
+                console.error(err);
+                router.push(href);
+              }
+            },
+          });
+        }
+      }
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    window.addEventListener("click", handleLinkClick, true); // Capture phase click intercept!
+
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      window.removeEventListener("click", handleLinkClick, true);
+    };
+  }, [loading, result, matchId, router]);
+
+  async function handleAutoForfeit() {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/matches/${matchId}/leave`, { method: "POST" });
+      const data = await res.json();
+      setResult(data);
+      setLoading(false);
+      setModal({
+        isOpen: true,
+        title: "⏱️ Time's Up!",
+        message: "Battle overall time has expired! You surrendered the match.",
+        type: "alert",
+        onConfirm: () => {},
+      });
+    } catch (err) {
+      console.error("Auto forfeit failed:", err);
+      setLoading(false);
+    }
+  }
 
   async function handleAnswer(idx: number) {
     if (showFeedback || selectedAnswer !== null) return;
-    if (timerRef.current) clearInterval(timerRef.current);
 
     // 1. INSTANT UI FEEDBACK
     setSelectedAnswer(idx);
@@ -152,6 +281,12 @@ export default function BattleArena({ matchId, currentUserId }: BattleArenaProps
     // Always show feedback immediately so the "Next" button appears and game doesn't freeze
     setShowFeedback(true);
     answeredCount.current += 1;
+
+    // Optimistically update score instantly without network delay
+    const isCorrect = idx === preloadedCorrect;
+    if (isCorrect) {
+      setMyScore((s) => s + 1);
+    }
 
     // 2. BACKGROUND SERVER SYNC
     try {
@@ -183,11 +318,62 @@ export default function BattleArena({ matchId, currentUserId }: BattleArenaProps
     const isLastQuestion = currentIndex >= questions.length - 1;
 
     if (isLastQuestion) {
-      // Complete the match
       if (pollRef.current) clearInterval(pollRef.current);
-      const res = await fetch(`/api/matches/${matchId}/complete`, { method: "POST" });
-      const data = await res.json();
-      setResult(data);
+      setLoading(true);
+
+      try {
+        const res = await fetch(`/api/matches/${matchId}/complete`, { method: "POST" });
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || `HTTP ${res.status}`);
+        }
+        const data = await res.json();
+        setResult(data);
+        setLoading(false);
+        
+        if (data.isWaitingForOpponent) {
+          // Poll complete status every 2 seconds to update live score and wait until finalized
+          completePollRef.current = setInterval(async () => {
+            try {
+              const resPoll = await fetch(`/api/matches/${matchId}/complete`, { method: "POST" });
+              if (!resPoll.ok) {
+                const errData = await resPoll.json().catch(() => ({}));
+                throw new Error(errData.error || `HTTP ${resPoll.status}`);
+              }
+              const dataPoll = await resPoll.json();
+              if (!dataPoll.isWaitingForOpponent) {
+                clearInterval(completePollRef.current!);
+                setResult(dataPoll);
+              } else {
+                // Poll opponent's live score from single match GET endpoint and inject into result finalScore
+                const resMatch = await fetch(`/api/matches/${matchId}`);
+                const dataMatch = await resMatch.json();
+                if (dataMatch.match) {
+                  setResult({
+                    ...dataPoll,
+                    finalScore: {
+                      player1: dataMatch.match.player1Score,
+                      player2: dataMatch.match.player2Score,
+                    }
+                  });
+                }
+              }
+            } catch (err) {
+              console.error("Failed to poll final completion status:", err);
+            }
+          }, 2000);
+        }
+      } catch (err: any) {
+        console.error("Failed to complete match:", err);
+        setModal({
+          isOpen: true,
+          title: "Error",
+          message: err.message || "Failed to complete the battle. Please try again.",
+          type: "alert",
+          onConfirm: () => {},
+        });
+        setLoading(false);
+      }
       return;
     }
 
@@ -195,6 +381,47 @@ export default function BattleArena({ matchId, currentUserId }: BattleArenaProps
     setSelectedAnswer(null);
     setCorrectIndex(null);
     setShowFeedback(false);
+  }
+
+  async function performSurrender(skipSetResult = false) {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/matches/${matchId}/leave`, { method: "POST" });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      if (!skipSetResult) {
+        setResult(data);
+      }
+      setLoading(false);
+      return data;
+    } catch (err: any) {
+      console.error("Failed to surrender match:", err);
+      setLoading(false);
+      throw err;
+    }
+  }
+
+  async function handleLeave() {
+    setModal({
+      isOpen: true,
+      title: "🏳️ Surrender Battle",
+      message: "Are you sure you want to surrender? You will forfeit the match and your opponent will win!",
+      type: "confirm",
+      onConfirm: async () => {
+        await performSurrender(false).catch((err) => {
+          setModal({
+            isOpen: true,
+            title: "Error",
+            message: err.message || "Failed to surrender match. Please try again.",
+            type: "alert",
+            onConfirm: () => {},
+          });
+        });
+      },
+    });
   }
 
   if (loading || !match) {
@@ -216,9 +443,11 @@ export default function BattleArena({ matchId, currentUserId }: BattleArenaProps
     );
   }
 
+
+
   const q = questions[currentIndex];
-  const timerPct = (timeLeft / QUESTION_TIME) * 100;
-  const timerColor = timeLeft <= 5 ? "var(--brand-danger)" : timeLeft <= 10 ? "var(--brand-gold)" : "var(--brand-cyan)";
+  const timerPct = (totalTimeLeft / 90) * 100;
+  const timerColor = totalTimeLeft <= 15 ? "var(--brand-danger)" : totalTimeLeft <= 40 ? "var(--brand-gold)" : "var(--brand-cyan)";
 
   const me = myRole === "player1" ? match.player1 : match.player2;
   const opponent = myRole === "player1" ? match.player2 : match.player1;
@@ -227,6 +456,16 @@ export default function BattleArena({ matchId, currentUserId }: BattleArenaProps
 
   return (
     <div className="flex flex-col min-h-[calc(100vh-12rem)] md:min-h-[calc(100vh-8rem)] w-full max-w-4xl mx-auto gap-6 sm:gap-8">
+
+      {/* Top Header Controls: Forfeit Button */}
+      <div className="flex items-center justify-end -mb-2">
+        <button
+          onClick={handleLeave}
+          className="text-[10px] sm:text-xs font-bold text-slate-400 hover:text-red-400 transition-all duration-200 flex items-center gap-1.5 px-3 py-1.5 rounded-xl hover:bg-red-500/10 border border-white/5 hover:border-red-500/20 active:scale-95 no-tap cursor-pointer"
+        >
+          🏳️ Surrender Battle
+        </button>
+      </div>
 
       {/* ── TOP: Player scores (Fighter HUD) ── */}
       <div className="sticky top-16 sm:top-20 z-40 flex items-center justify-between sm:gap-4 bg-slate-950/80 p-2 sm:p-6 rounded-sm border border-white/10 backdrop-blur-xl shadow-2xl relative overflow-hidden">
@@ -247,13 +486,13 @@ export default function BattleArena({ matchId, currentUserId }: BattleArenaProps
           </div>
         </div>
 
-        {/* VS + Timer */}
+        {/* VS + Battle Timer */}
         <div className="flex flex-col items-center gap-2 shrink-0 px-2 sm:px-4 relative z-10">
           <div
-            className="text-base sm:text-2xl font-black px-4 sm:px-6 py-1 sm:py-2 rounded-xl sm:rounded-2xl flex items-center justify-center min-w-[60px] sm:min-w-[100px] transition-colors"
+            className="text-base sm:text-2xl font-black px-4 sm:px-6 py-1 sm:py-2 rounded-xl sm:rounded-2xl flex items-center justify-center min-w-[60px] sm:min-w-[100px] transition-colors animate-pulse"
             style={{ color: timerColor, background: `${timerColor}20`, border: `2px solid ${timerColor}40` }}
           >
-            {timeLeft}s
+            {totalTimeLeft}s
           </div>
           <span className="text-[10px] sm:text-xs text-muted-foreground font-black uppercase tracking-widest">
             Q {currentIndex + 1}/10
@@ -373,6 +612,53 @@ export default function BattleArena({ matchId, currentUserId }: BattleArenaProps
             )}
           </AnimatePresence>
         </motion.div>
+      </AnimatePresence>
+      {/* Premium Custom Modal Dialog */}
+      <AnimatePresence>
+        {modal.isOpen && (
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="glass-card w-full max-w-md p-6 border border-white/10 shadow-2xl relative flex flex-col gap-4 text-center rounded-3xl"
+            >
+              {/* Header Title */}
+              <h3 className="text-xl font-black font-[family-name:var(--font-syne)] text-white tracking-wide">
+                {modal.title}
+              </h3>
+              
+              {/* Message */}
+              <p className="text-sm text-slate-300 leading-relaxed">
+                {modal.message}
+              </p>
+              
+              {/* Action Buttons */}
+              <div className="flex gap-3 justify-center mt-2">
+                {modal.type === "confirm" && (
+                  <button
+                    onClick={() => {
+                      setModal((m) => ({ ...m, isOpen: false }));
+                      if (modal.onCancel) modal.onCancel();
+                    }}
+                    className="px-5 py-2.5 rounded-xl border border-white/10 hover:bg-white/5 text-slate-300 text-xs font-bold transition-all cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                )}
+                <button
+                  onClick={() => {
+                    setModal((m) => ({ ...m, isOpen: false }));
+                    modal.onConfirm();
+                  }}
+                  className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-red-500 to-amber-600 hover:opacity-90 text-white text-xs font-black transition-all shadow-[0_0_15px_rgba(239,68,68,0.3)] cursor-pointer"
+                >
+                  {modal.type === "confirm" ? "Surrender" : "OK"}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
       </AnimatePresence>
     </div>
   );

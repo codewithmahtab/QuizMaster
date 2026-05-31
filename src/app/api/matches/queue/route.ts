@@ -48,15 +48,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Insufficient coins" }, { status: 400 });
   }
 
-  // Clean up any stale pending matches for this user (from previous sessions)
-  await prisma.match.updateMany({
+  // Clean up any stale pending matches in the background to avoid blocking critical matchmaking path
+  prisma.match.updateMany({
     where: {
       player1Id: userId,
       status: "pending",
       createdAt: { lt: new Date(Date.now() - 30_000) }, // older than 30s
     },
     data: { status: "abandoned" },
-  });
+  }).catch((err) => console.error("Background matchmaking cleanup error:", err));
 
   // If user already has an ACTIVE match (actually in progress), return it
   const activeMatch = await prisma.match.findFirst({
@@ -69,30 +69,29 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ matchId: activeMatch.id, joined: true });
   }
 
-  // Phase 1 — instant join if a lobby already exists
+  // Phase 1 — instant join if a lobby already exists (questions already pre-selected by Player 1)
   const openMatch = await findOpenLobby(userId, type, coinStake);
   if (openMatch) {
-    const selected = await pickQuestions();
     const match = await prisma.match.update({
       where: { id: openMatch.id },
-      data: { player2Id: userId, status: "active", questionIds: selected, startedAt: new Date() },
+      data: { player2Id: userId, status: "active", startedAt: new Date() },
     });
     return NextResponse.json({ matchId: match.id, joined: true });
   }
 
-  // Phase 2 — create our own pending lobby
+  // Phase 2 — create our own pending lobby with pre-selected questions (speeds up Player 2 join!)
+  const selected = await pickQuestions();
   const newMatch = await prisma.match.create({
-    data: { type, status: "pending", player1Id: userId, coinStake },
+    data: { type, status: "pending", player1Id: userId, coinStake, questionIds: selected },
   });
 
   // Phase 3 — race-condition retry (another user may have just created a lobby)
   const raceMatch = await findOpenLobby(userId, type, coinStake);
   if (raceMatch) {
-    const selected = await pickQuestions();
     const [joined] = await prisma.$transaction([
       prisma.match.update({
         where: { id: raceMatch.id },
-        data: { player2Id: userId, status: "active", questionIds: selected, startedAt: new Date() },
+        data: { player2Id: userId, status: "active", startedAt: new Date() },
       }),
       prisma.match.update({ where: { id: newMatch.id }, data: { status: "abandoned" } }),
     ]);
@@ -147,12 +146,11 @@ export async function GET(req: NextRequest) {
   });
 
   if (otherMatch) {
-    const selected = await pickQuestions();
     // We become player2 of the other lobby; abandon our own
     const [activated] = await prisma.$transaction([
       prisma.match.update({
         where: { id: otherMatch.id },
-        data: { player2Id: userId, status: "active", questionIds: selected, startedAt: new Date() },
+        data: { player2Id: userId, status: "active", startedAt: new Date() },
       }),
       prisma.match.update({ where: { id: matchId }, data: { status: "abandoned" } }),
     ]);

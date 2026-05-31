@@ -13,37 +13,37 @@ datasource db {
 // ─────────────────────────────────────────
 
 model User {
-  id              String    @id @default(auto()) @map("_id") @db.ObjectId
-  username        String    @unique
-  email           String    @unique
-  passwordHash    String?
-  avatarUrl       String?   // DiceBear URL or custom
-  avatarFrameId   String?   @db.ObjectId
-  bio             String?
+  id            String  @id @default(auto()) @map("_id") @db.ObjectId
+  username      String  @unique
+  email         String  @unique
+  passwordHash  String?
+  avatarUrl     String? // DiceBear URL or custom
+  avatarFrameId String? @db.ObjectId
+  bio           String?
 
   // Progression
-  level           Int       @default(1)
-  xp              Int       @default(0)
-  coins           Int       @default(100)       // new users start with 100 coins
-  rankedPoints    Int       @default(0)
+  level        Int @default(1)
+  xp           Int @default(0)
+  coins        Int @default(100) // new users start with 100 coins
+  rankedPoints Int @default(0)
 
   // Stats
-  totalWins       Int       @default(0)
-  totalMatches    Int       @default(0)
-  longestStreak   Int       @default(0)
+  totalWins     Int @default(0)
+  totalMatches  Int @default(0)
+  longestStreak Int @default(0)
 
   // Daily Login
-  loginStreak     Int       @default(0)
-  lastLoginDate   DateTime?
-  lastSpinDate    DateTime?
+  loginStreak   Int       @default(0)
+  lastLoginDate DateTime?
+  lastSpinDate  DateTime?
 
   // Timestamps
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  matchesAsP1       Match[]              @relation("Player1Matches")
-  matchesAsP2       Match[]              @relation("Player2Matches")
+  matchesAsP1       Match[]               @relation("Player1Matches")
+  matchesAsP2       Match[]               @relation("Player2Matches")
   purchases         Purchase[]
   weeklyStats       WeeklyStats[]
   dailyCompletions  DailyQuizCompletion[]
@@ -103,10 +103,10 @@ model Question {
   id          String   @id @default(auto()) @map("_id") @db.ObjectId
   text        String
   options     String[] // 4 answer options
-  answerIndex Int      // 0–3 (index of correct answer in options)
-  category    String   // "general" | "science" | "history" | "sports" | "entertainment"
-  difficulty  String   // "easy" | "medium" | "hard"
-  explanation String?  // optional explanation shown after answer
+  answerIndex Int // 0–3 (index of correct answer in options)
+  category    String // "general" | "science" | "history" | "sports" | "entertainment"
+  difficulty  String // "easy" | "medium" | "hard"
+  explanation String? // optional explanation shown after answer
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
 }
@@ -116,32 +116,32 @@ model Question {
 // ─────────────────────────────────────────
 
 model Match {
-  id           String    @id @default(auto()) @map("_id") @db.ObjectId
-  type         String    // "casual" | "ranked" | "coin_bet" | "daily" | "tournament"
-  status       String    @default("pending") // "pending" | "active" | "completed" | "abandoned"
+  id     String @id @default(auto()) @map("_id") @db.ObjectId
+  type   String // "casual" | "ranked" | "coin_bet" | "daily" | "tournament"
+  status String @default("pending") // "pending" | "active" | "completed" | "abandoned"
 
-  player1Id    String    @db.ObjectId
-  player2Id    String?   @db.ObjectId         // null for daily quiz
-  winnerId     String?   @db.ObjectId
+  player1Id String  @db.ObjectId
+  player2Id String? @db.ObjectId // null for daily quiz
+  winnerId  String? @db.ObjectId
 
-  player1Score Int       @default(0)
-  player2Score Int       @default(0)
-  player1Finished Boolean   @default(false)
-  player2Finished Boolean   @default(false)
+  player1Score    Int     @default(0)
+  player2Score    Int     @default(0)
+  player1Finished Boolean @default(false)
+  player2Finished Boolean @default(false)
 
-  coinStake    Int       @default(0)          // for coin_bet mode
-  questionIds  String[]  @db.ObjectId         // ordered list of 10 question IDs
+  coinStake   Int      @default(0) // for coin_bet mode
+  questionIds String[] @db.ObjectId // ordered list of 10 question IDs
 
-  tournamentId String?   @db.ObjectId
-  roundNumber  Int?                            // tournament round
+  tournamentId String? @db.ObjectId
+  roundNumber  Int? // tournament round
 
-  startedAt    DateTime?
-  completedAt  DateTime?
-  createdAt    DateTime  @default(now())
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
 
-  player1      User      @relation("Player1Matches", fields: [player1Id], references: [id])
-  player2      User?     @relation("Player2Matches", fields: [player2Id], references: [id])
-  tournament   Tournament? @relation(fields: [tournamentId], references: [id])
+  player1    User        @relation("Player1Matches", fields: [player1Id], references: [id])
+  player2    User?       @relation("Player2Matches", fields: [player2Id], references: [id])
+  tournament Tournament? @relation(fields: [tournamentId], references: [id])
 }
 
 // ─────────────────────────────────────────
@@ -156,26 +156,26 @@ model Tournament {
   prizePool   Int       @default(0)
   maxPlayers  Int       @default(16)
   status      String    @default("open") // "open" | "active" | "completed"
-  bracket     Json?     // bracket structure stored as JSON
+  bracket     Json? // bracket structure stored as JSON
   winnerId    String?   @db.ObjectId
   startedAt   DateTime?
   completedAt DateTime?
   createdAt   DateTime  @default(now())
 
-  entries     TournamentEntry[]
-  matches     Match[]
+  entries TournamentEntry[]
+  matches Match[]
 }
 
 model TournamentEntry {
-  id           String     @id @default(auto()) @map("_id") @db.ObjectId
-  tournamentId String     @db.ObjectId
-  userId       String     @db.ObjectId
-  joinedAt     DateTime   @default(now())
-  eliminated   Boolean    @default(false)
-  placement    Int?       // final placement (1st, 2nd, etc.)
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  tournamentId String   @db.ObjectId
+  userId       String   @db.ObjectId
+  joinedAt     DateTime @default(now())
+  eliminated   Boolean  @default(false)
+  placement    Int? // final placement (1st, 2nd, etc.)
 
-  tournament   Tournament @relation(fields: [tournamentId], references: [id])
-  user         User       @relation(fields: [userId], references: [id])
+  tournament Tournament @relation(fields: [tournamentId], references: [id])
+  user       User       @relation(fields: [userId], references: [id])
 
   @@unique([tournamentId, userId])
 }
@@ -188,7 +188,7 @@ model ShopItem {
   id          String   @id @default(auto()) @map("_id") @db.ObjectId
   name        String
   description String?
-  type        String   // "avatar" | "frame" | "theme" | "xp_boost" | "coin_doubler"
+  type        String // "avatar" | "frame" | "theme" | "xp_boost" | "coin_doubler"
   imageUrl    String?
   cost        Int
   rarity      String   @default("common") // "common" | "rare" | "epic" | "legendary"
@@ -202,7 +202,7 @@ model Purchase {
   itemId      String   @db.ObjectId
   purchasedAt DateTime @default(now())
 
-  user        User     @relation(fields: [userId], references: [id])
+  user User @relation(fields: [userId], references: [id])
 }
 
 // ─────────────────────────────────────────
@@ -212,14 +212,14 @@ model Purchase {
 model DailyQuizCompletion {
   id          String   @id @default(auto()) @map("_id") @db.ObjectId
   userId      String   @db.ObjectId
-  date        String   // "YYYY-MM-DD" format for easy querying
+  date        String // "YYYY-MM-DD" format for easy querying
   score       Int
   totalQ      Int      @default(10)
   coinsEarned Int      @default(0)
   xpEarned    Int      @default(0)
   completedAt DateTime @default(now())
 
-  user        User     @relation(fields: [userId], references: [id])
+  user User @relation(fields: [userId], references: [id])
 
   @@unique([userId, date])
 }
@@ -229,14 +229,14 @@ model DailyQuizCompletion {
 // ─────────────────────────────────────────
 
 model WeeklyStats {
-  id        String   @id @default(auto()) @map("_id") @db.ObjectId
-  userId    String   @db.ObjectId
-  weekStart String   // "YYYY-MM-DD" of the Monday that week started
-  wins      Int      @default(0)
-  matches   Int      @default(0)
-  points    Int      @default(0)
+  id        String @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String @db.ObjectId
+  weekStart String // "YYYY-MM-DD" of the Monday that week started
+  wins      Int    @default(0)
+  matches   Int    @default(0)
+  points    Int    @default(0)
 
-  user      User     @relation(fields: [userId], references: [id])
+  user User @relation(fields: [userId], references: [id])
 
   @@unique([userId, weekStart])
 }
@@ -250,11 +250,11 @@ model Notification {
   userId    String   @db.ObjectId
   title     String
   message   String
-  type      String   // "rank" | "rewards" | "battle" | "tournament"
+  type      String // "rank" | "rewards" | "battle" | "tournament"
   read      Boolean  @default(false)
   createdAt DateTime @default(now())
 
-  user      User     @relation(fields: [userId], references: [id])
+  user User @relation(fields: [userId], references: [id])
 }
 
 // ─────────────────────────────────────────
@@ -264,11 +264,11 @@ model Notification {
 model GeneralProgress {
   id            String   @id @default(auto()) @map("_id") @db.ObjectId
   userId        String   @db.ObjectId
-  category      String   // "world" | "science" | "computer" | "pharmacy" | "mixed"
+  category      String // "world" | "science" | "computer" | "pharmacy" | "mixed"
   unlockedLevel Int      @default(1) // Tracks current highest unlocked level (e.g. 1 to 200)
   updatedAt     DateTime @updatedAt
 
-  user          User     @relation(fields: [userId], references: [id])
+  user User @relation(fields: [userId], references: [id])
 
   @@unique([userId, category])
 }

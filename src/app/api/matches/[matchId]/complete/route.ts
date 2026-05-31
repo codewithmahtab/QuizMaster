@@ -24,8 +24,11 @@ export async function POST(
       player2Id: true,
       player1Score: true,
       player2Score: true,
+      player1Finished: true,
+      player2Finished: true,
       winnerId: true,
       coinStake: true,
+      startedAt: true,
     },
   });
 
@@ -40,16 +43,75 @@ export async function POST(
   const cookieName = `match_rewarded_${matchId}`;
   const alreadyRewarded = req.cookies.get(cookieName)?.value === "true";
 
-  // Calculate winner based on scores
+  // 1. Determine if this call should trigger final match completion
+  let finalComplete = false;
+  let opponentAbandoned = false;
+
+  // Single player match (daily quiz) always completes instantly
+  if (!match.player2Id) {
+    finalComplete = true;
+  } else {
+    const isOpponentFinished = isPlayer1 ? match.player2Finished : match.player1Finished;
+
+    if (isOpponentFinished) {
+      // Opponent has already finished, so now both are finished!
+      finalComplete = true;
+    } else {
+      // Opponent has not finished yet. Check inactivity/timeout threshold
+      const matchDurationSeconds = match.startedAt
+        ? (Date.now() - new Date(match.startedAt).getTime()) / 1000
+        : 0;
+
+      // Timeout: 120 seconds since match started (plenty of time for 10 questions)
+      if (matchDurationSeconds > 120) {
+        finalComplete = true;
+        opponentAbandoned = true;
+      }
+    }
+  }
+
+  // If already completed in DB, skip waiting and serve rewards
+  if (match.status === "completed") {
+    finalComplete = true;
+  }
+
+  // If not completed yet and both are not finished, mark me as finished and return waiting state
+  if (!finalComplete && match.status !== "completed") {
+    const updatedMatch = await prisma.match.update({
+      where: { id: matchId },
+      data: {
+        player1Finished: isPlayer1 ? true : undefined,
+        player2Finished: !isPlayer1 ? true : undefined,
+      },
+    });
+
+    return NextResponse.json({
+      status: "completed",
+      isWaitingForOpponent: true,
+      isWin: false,
+      isDraw: false,
+      winnerId: null,
+      coinsEarned: 0,
+      xpEarned: 0,
+      rankPointsChange: 0,
+      finalScore: { player1: updatedMatch.player1Score, player2: updatedMatch.player2Score },
+    });
+  }
+
+  // 2. Final Completion Block
   const p1Score = match.player1Score;
   const p2Score = match.player2Score;
   let winnerId = match.winnerId;
 
-  // If match status is not completed, we are the first one completing it. Let's calculate and set the winner.
   if (match.status !== "completed") {
-    if (p1Score > p2Score) winnerId = match.player1Id;
-    else if (p2Score > p1Score) winnerId = match.player2Id ?? null;
-    else winnerId = null; // draw
+    if (opponentAbandoned) {
+      // Active player (me) is declared the winner if opponent took too long/abandoned
+      winnerId = userId;
+    } else {
+      if (p1Score > p2Score) winnerId = match.player1Id;
+      else if (p2Score > p1Score) winnerId = match.player2Id ?? null;
+      else winnerId = null; // draw
+    }
   }
 
   // Calculate rewards
@@ -105,6 +167,8 @@ export async function POST(
             status: "completed",
             winnerId,
             completedAt: new Date(),
+            player1Finished: isPlayer1 ? true : undefined,
+            player2Finished: !isPlayer1 ? true : undefined,
           },
         })
       );
@@ -113,7 +177,6 @@ export async function POST(
     await prisma.$transaction(transactions);
 
     // Create in-app notification
-    const opponentLabel = isPlayer1 ? "Player 2" : "Player 1";
     let titleStr = "Battle Completed ⚔️";
     let msgStr = `Good effort! You completed a ${match.type} match. Earned +${xpEarned} XP.`;
 
@@ -138,6 +201,7 @@ export async function POST(
   // Create response
   const response = NextResponse.json({
     status: "completed",
+    isWaitingForOpponent: false,
     isWin,
     isDraw,
     winnerId,
