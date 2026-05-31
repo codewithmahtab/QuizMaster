@@ -226,16 +226,16 @@ export default function BattleArena({ matchId, currentUserId }: BattleArenaProps
   const oppAvatar = opponent?.avatarUrl || getAvatarUrl(opponent?.username || "Bot");
 
   return (
-    <div className="flex flex-col min-h-[calc(100vh-12rem)] md:min-h-[calc(100vh-8rem)] w-full max-w-4xl mx-auto gap-6 sm:gap-8 px-4">
+    <div className="flex flex-col min-h-[calc(100vh-12rem)] md:min-h-[calc(100vh-8rem)] w-full max-w-4xl mx-auto gap-6 sm:gap-8">
 
       {/* ── TOP: Player scores (Fighter HUD) ── */}
-      <div className="sticky top-16 sm:top-20 z-40 flex items-center justify-between sm:gap-4 bg-slate-950/80 p-4 sm:p-6 rounded-sm border border-white/10 backdrop-blur-xl shadow-2xl relative overflow-hidden">
+      <div className="sticky top-16 sm:top-20 z-40 flex items-center justify-between sm:gap-4 bg-slate-950/80 p-2 sm:p-6 rounded-sm border border-white/10 backdrop-blur-xl shadow-2xl relative overflow-hidden">
         {/* Glow effect behind */}
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-full bg-gradient-to-r from-[var(--brand-cyan)]/10 via-transparent to-[var(--brand-danger)]/10 blur-xl pointer-events-none" />
 
         {/* Me */}
         <div className="flex items-center gap-3 sm:gap-5 flex-1 relative z-10">
-          <div className="w-12 h-12 sm:w-20 sm:h-20 rounded-xl sm:rounded-2xl overflow-hidden border-4 border-[var(--brand-cyan)] shrink-0 shadow-[0_0_15px_rgba(6,182,212,0.4)]">
+          <div className="w-12 h-12 sm:w-20 sm:h-20 rounded-xl sm:rounded-2xl overflow-hidden">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={meAvatar} alt="You" className="w-full h-full object-cover" />
           </div>
@@ -270,7 +270,7 @@ export default function BattleArena({ matchId, currentUserId }: BattleArenaProps
               {opponentScore}
             </p>
           </div>
-          <div className="w-12 h-12 sm:w-20 sm:h-20 rounded-xl sm:rounded-2xl overflow-hidden border-4 border-[var(--brand-danger)] shrink-0 shadow-[0_0_15px_rgba(239,68,68,0.4)]">
+          <div className="w-12 h-12 sm:w-20 sm:h-20 rounded-xl sm:rounded-2xl overflow-hidden shrink-0">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={oppAvatar} alt={opponent?.username || "Opponent"} className="w-full h-full object-cover" />
           </div>
