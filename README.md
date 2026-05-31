@@ -2,7 +2,6 @@
 
 QuizMaster Pro is a modern, high-performance multiplayer trivia web application. Built with a focus on premium aesthetics and real-time engagement, players can battle opponents in 1v1 trivia matches, climb the global leaderboard, and earn coins to customize their profiles.
 
-![QuizMaster Preview](https://via.placeholder.com/1200x600.png?text=Add+a+Screenshot+Here)
 
 ## ✨ Features
 
